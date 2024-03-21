@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Labcom Task</title>
+    <style>
+        body {
+            background-image: url('{{ background_url }}');
+            background-size: cover;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            color: white; /* Adjust text color to ensure visibility against your background */
+            font-family: Arial, sans-serif;
+        }
+        h1 {
+            font-size: 2em;
+        }
+        .message {
+            font-size: 24px;
+            color: #333;
+            padding: 20px;
+            background-color: #f0f0f0;
+            display: inline-block;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="message">
+        {{ message }}
+    </div>
+</body>
+</html>
