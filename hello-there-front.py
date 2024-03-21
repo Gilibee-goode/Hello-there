@@ -20,7 +20,9 @@ def labcom():
 
 
 def get_value():
+    # response = requests.get('http://localhost:5001/api/get-value-default')
     response = requests.get('http://localhost:5001/api/get-value')
+
     if response.status_code == 200:
         return response.json()['value']
     else:

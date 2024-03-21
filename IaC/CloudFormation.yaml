@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: '2010-09-09' # CloudFormation template version declaration
+Description: VPC with 2 Public Subnets and 2 Private Subnets across 2 AZs # Description of this CloudFormation template
+
+Resources:
+  # VPC
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties: 
+      CidrBlock: 10.0.0.0/16 # The IP address range for the VPC
+      EnableDnsSupport: true # Enables DNS resolution within the VPC
+      EnableDnsHostnames: true # Allows instances to receive DNS hostnames
+      Tags:
+        - Key: Name
+          Value: MyCustomVPC # Name tag for the VPC
+
+  # Internet Gateway
+  MyInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: MyIGW # Name tag for the Internet Gateway
+
+  # Attach the Internet Gateway to the VPC
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MyVPC # Reference to MyVPC
+      InternetGatewayId: !Ref MyInternetGateway # Reference to MyInternetGateway
+
+  # Public Subnet in AZ1
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC # Associates this subnet with MyVPC
+      CidrBlock: 10.0.1.0/24 # IP address range for the subnet
+      AvailabilityZone: !Select [0, !GetAZs ''] # Selects the first availability zone
+      MapPublicIpOnLaunch: true # Assigns public IP to instances in this subnet
+      Tags:
+        - Key: Name
+          Value: PublicSubnet1 # Name tag for the subnet
+
+  # Private Subnet in AZ1
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC # Associates this subnet with MyVPC
+      CidrBlock: 10.0.2.0/24 # IP address range for the subnet
+      AvailabilityZone: !Select [0, !GetAZs ''] # Matches PublicSubnet1 AZ for consistency
+      MapPublicIpOnLaunch: false # Does not assign public IPs to instances
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet1 # Name tag for the subnet
+
+  # Public Subnet in AZ2
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC # Associates this subnet with MyVPC
+      CidrBlock: 10.0.3.0/24 # IP address range for the subnet
+      AvailabilityZone: !Select [1, !GetAZs ''] # Selects the second availability zone
+      MapPublicIpOnLaunch: true # Assigns public IP to instances in this subnet
+      Tags:
+        - Key: Name
+          Value: PublicSubnet2 # Name tag for the subnet
+
+  # Private Subnet in AZ2
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC # Associates this subnet with MyVPC
+      CidrBlock: 10.0.4.0/24 # IP address range for the subnet
+      AvailabilityZone: !Select [1, !GetAZs ''] # Matches PublicSubnet2 AZ for consistency
+      MapPublicIpOnLaunch: false # Does not assign public IPs to instances
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet2 # Name tag for the subnet
+
