@@ -1,6 +1,16 @@
 AWSTemplateFormatVersion: '2010-09-09' # CloudFormation template version declaration
 Description: VPC with 2 Public Subnets and 2 Private Subnets across 2 AZs # Description of this CloudFormation template
 
+
+
+Parameters:
+  DBUsername:
+    Type: String
+    Description: "The username for the database."
+    Default: "defaultdbuser" # Default username for the database
+
+    
+    
 Resources:
   # VPC
   MyVPC:
@@ -120,11 +130,20 @@ Resources:
       Port: 80
       Protocol: HTTP
 
-  # ECR Repository
-  MyECRRepository:
+  # ECR Repository Frontend
+  MyECRRepositoryFront:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryName: my-dorker-repo #  Docker repository name
+      RepositoryName: hello-there-frontend #  Docker repository name
+      ImageScanningConfiguration:
+        scanOnPush: true #  Enable scanning of images on push for vulnerabilities
+      ImageTagMutability: MUTABLE #  or IMMUTABLE depending on versioning preference
+
+  # ECR Repository Backend
+  MyECRRepositoryBack:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: hello-there-backend #  Docker repository name
       ImageScanningConfiguration:
         scanOnPush: true #  Enable scanning of images on push for vulnerabilities
       ImageTagMutability: MUTABLE #  or IMMUTABLE depending on versioning preference
@@ -159,10 +178,11 @@ Resources:
       DBSubnetGroupName: !Ref MyDBSubnetGroup # Reference your DB Subnet Group here
       VPCSecurityGroups:
         - !Ref MyDBSecurityGroup # Reference to a DB security group
-      PubliclyAccessible: false # Set to true if you need external access
+      PubliclyAccessible: true # Set to true if you need external access
       # You can specify additional properties like backup retention, tags, etc.
 
 
+  # DB security group 
   MyDBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -173,6 +193,153 @@ Resources:
           FromPort: 3306
           ToPort: 3306
           CidrIp: 10.0.0.0/16 # Adjust the CIDR to match your VPC's or specific subnets
+
+
+  # set RDS secret
+  MyDBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${AWS::StackName}-DBSecret" # Name of the secret using CloudFormation stack name for uniqueness
+      Description: "Secret for RDS database credentials" # Descriptive text for the secret's purpose
+      # Generates a secret string:
+      GenerateSecretString:
+        # Template for the secret string; includes the DB username
+        SecretStringTemplate: !Sub |
+          {
+            "username": "${DBUsername}"
+          }
+        GenerateStringKey: "password" # Key for the generated part of the secret (the password)
+        PasswordLength: 16 # Length of the generated password
+        ExcludePunctuation: true # Excludes punctuation from the generated password for compatibility
+        IncludeSpace: false # Excludes spaces from the generated password for simplicity
+
+
+#  # Secret policy access
+#  ECSExecutionRolePolicy:
+#    Type: AWS::IAM::Policy
+#    Properties:
+#      PolicyName: AccessSecretsPolicy
+#      Roles: 
+#        - !Ref ECSTaskExecutionRole # Replace with your ECS Task Execution Role ----------------------
+#      PolicyDocument:
+#        Version: "2012-10-17"
+#        Statement:
+#          - Effect: Allow
+#            Action: secretsmanager:GetSecretValue
+#            Resource: !Ref MyDBSecret
+           
+           
+  # ECS Role          
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: ECSTaskExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:GetDownloadUrlForLayer'
+                  - 'ecr:GetRepositoryPolicy'
+                  - 'ecr:DescribeRepositories'
+                  - 'ecr:ListImages'
+                  - 'ecr:DescribeImages'
+                  - 'ecr:BatchGetImage'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:CreateLogGroup'
+                  - 'secretsmanager:GetSecretValue' # Secrets Manager for your database credentials
+                Resource: '*'
+            
+      
+  # ECS cluster     
+  MyEcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: MyEcsCluster # Name of your ECS cluster
+
+  # ECS task
+  MyEcsTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: hello-there # A unique name for your task definition
+      Cpu: "256" # CPU units for the task
+      Memory: "512" # Memory in MiB for the task
+      NetworkMode: awsvpc # Required for Fargate
+      RequiresCompatibilities:
+        - FARGATE # Specifies this task definition requires the Fargate launch type
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole # Assumes you have this role defined elsewhere in your template
+      ContainerDefinitions:
+        - Name: hello-there-backend
+          Image: 058264276766.dkr.ecr.il-central-1.amazonaws.com/hello-there-backend
+          Essential: true
+        #  Environment: # Define environment variables, if any
+        #    - Name: DB_SECRET
+        #      Value: !Ref MyDBSecret # Assuming you have a Secrets Manager secret for your DB credentials
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: /ecs/hello-there-backend
+              awslogs-region: <region>
+              awslogs-stream-prefix: ecs
+        - Name: hello-there-frontend
+          Image: 058264276766.dkr.ecr.il-central-1.amazonaws.com/hello-there-frontend
+          Essential: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: /ecs/hello-there-frontend
+              awslogs-region: <region>
+              awslogs-stream-prefix: ecs
+
+
+
+  MyEcsService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: ecs-service-hello-there # Name of your service
+      Cluster: !Ref MyEcsCluster
+      TaskDefinition: !Ref MyEcsTaskDefinition
+      DesiredCount: 1 # Task instance replications
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:  # List of private subnet IDs where the task should run
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
+          AssignPublicIp: DISABLED # Tasks do not need public IPs
+          SecurityGroups:
+            - !Ref MyECSSecurityGroup # Security group for the task, make sure it allows necessary traffic
+
+
+  MyECSSecurityGroup:         #   TEMPORARY-----------------------------------------------------------------------------------
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ECS service
+      VpcId: !Ref MyVPC # Make sure this references your VPC's logical ID
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0 # Allows HTTP traffic from anywhere, adjust as needed
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 0.0.0.0/0 # Allows all outbound traffic, adjust as needed
+
+
 
 
 

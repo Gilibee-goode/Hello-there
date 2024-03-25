@@ -21,13 +21,13 @@ def labcom():
 
 def get_value():
     # response = requests.get('http://localhost:5001/api/get-value-default')
-    response = requests.get('http://localhost:5001/api/get-value')
+    response = requests.get('http://backend:5001/api/get-value')
+    # response = requests.get('http://localhost/backend')
 
     if response.status_code == 200:
         return response.json()['value']
     else:
         return "Error fetching value"
-
 
 
 if __name__ == '__main__':

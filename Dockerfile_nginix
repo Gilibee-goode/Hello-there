@@ -1,0 +1,18 @@
+# Use NGINX as the parent image
+FROM nginx:alpine
+
+# Remove the default NGINX configuration file
+RUN rm /etc/nginx/conf.d/default.conf
+
+# Copy the custom NGINX config into the container
+COPY nginx.conf /etc/nginx/nginx.conf
+
+# Copy your frontend application files to the NGINX server directory
+COPY /path/to/your/frontend/app /usr/share/nginx/html
+
+# Expose port 80 to the Docker network
+EXPOSE 80
+
+# Start NGINX
+CMD ["nginx", "-g", "daemon off;"]
+ 
